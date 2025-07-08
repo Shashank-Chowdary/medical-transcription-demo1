@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Medical Transcription AI</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      max-width: 600px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h1 {
+      color: #2c3e50;
+      margin-bottom: 20px;
+    }
+    .file-upload {
+      border: 2px dashed #3498db;
+      padding: 30px;
+      border-radius: 10px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      background: #f9f9f9;
+    }
+    .file-upload:hover {
+      background: #eef6fc;
+    }
+    .file-info {
+      margin-bottom: 20px;
+      font-weight: bold;
+      color: #2c3e50;
+    }
+    .button {
+      padding: 12px 30px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 25px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .button:hover {
+      background: #45a049;
+    }
+    .loading {
+      margin-top: 15px;
+      color: #3498db;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Medical Transcription AI</h1>
+
+    <div class="file-upload" id="uploadArea">
+      Click to upload or drag & drop your audio file
+      <input type="file" id="audioFile" accept=".mp3,.wav,.m4a" style="display:none;">
+    </div>
+
+    <div class="file-info" id="fileInfo" style="display:none;"></div>
+
+    <button class="button" id="processButton" disabled>Process Audio</button>
+    <div class="loading" id="loading" style="display:none;">Processing... Please wait</div>
+  </div>
+
+  <script>
+    const audioFileInput = document.getElementById('audioFile');
+    const uploadArea = document.getElementById('uploadArea');
+    const fileInfo = document.getElementById('fileInfo');
+    const processButton = document.getElementById('processButton');
+    const loading = document.getElementById('loading');
+
+    const WEBHOOK_URL = 'http://localhost:5678/webhook/agent2-audio-upload';
+
+    let selectedFile = null;
+
+    uploadArea.addEventListener('click', () => audioFileInput.click());
+    uploadArea.addEventListener('dragover', e => {
+      e.preventDefault();
+      uploadArea.style.background = '#e8f5e9';
+    });
+    uploadArea.addEventListener('dragleave', () => {
+      uploadArea.style.background = '#f9f9f9';
+    });
+    uploadArea.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadArea.style.background = '#f9f9f9';
+      const files = e.dataTransfer.files;
+      if (files.length > 0) handleFileSelect(files[0]);
+    });
+    audioFileInput.addEventListener('change', e => {
+      if (e.target.files.length > 0) handleFileSelect(e.target.files[0]);
+    });
+
+    function handleFileSelect(file) {
+      selectedFile = file;
+      fileInfo.textContent = `Selected File: ${file.name} (${formatBytes(file.size)})`;
+      fileInfo.style.display = 'block';
+      processButton.disabled = false;
+    }
+
+    function formatBytes(bytes) {
+      const sizes = ['Bytes', 'KB', 'MB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(1024));
+      return (bytes / Math.pow(1024, i)).toFixed(2) + ' ' + sizes[i];
+    }
+
+    processButton.addEventListener('click', async () => {
+      if (!selectedFile) return alert('Please select a file.');
+
+      loading.style.display = 'block';
+      processButton.disabled = true;
+
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': selectedFile.type || 'audio/mpeg'
+          },
+          body: selectedFile
+        });
+
+        const contentType = response.headers.get('Content-Type') || '';
+        if (contentType.includes('application/vnd.openxmlformats') || contentType.includes('application/octet-stream')) {
+          const blob = await response.blob();
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = `medical_report_${Date.now()}.docx`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(link.href);
+        } else {
+          const text = await response.text();
+          alert('Received unexpected response:\n' + text);
+        }
+
+      } catch (err) {
+        alert('Error: ' + err.message);
+      } finally {
+        loading.style.display = 'none';
+        processButton.disabled = false;
+      }
+    });
+  </script>
+
+</body>
+</html>
